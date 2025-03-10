@@ -2,6 +2,9 @@ use std::time::Duration;
 
 use eframe::egui;
 
+use crate::camera::Camera;
+use crate::ray::Ray;
+
 pub struct Renderer {
     image_data: Vec<u32>,
     aspect_ratio: f32,
@@ -17,7 +20,7 @@ impl Renderer {
         }
     }
 
-    pub fn render(&mut self, rect: egui::Rect) {
+    pub fn render(&mut self, rect: egui::Rect, camera: &Camera) {
         let clock = std::time::Instant::now();
 
         let w = rect.max.x - rect.min.x;
@@ -28,12 +31,17 @@ impl Renderer {
         self.image_data.clear();
         self.image_data.reserve((w * h) as _);
 
+        let ray_origin = camera.get_position();
+        let mut ray = Ray {
+            origin: *ray_origin,
+            direction: glam::Vec3::ZERO,
+        };
+
         for y in 0..h as usize {
             for x in 0..w as usize {
-                let mut coord = glam::vec2(x as f32 / w, y as f32 / h) * 2.0 - 1.0;
-                coord.x *= self.aspect_ratio;
+                ray.direction = camera.get_ray_directions()[x + y * w as usize];
+                let color = self.trace_ray(&ray);
 
-                let color = self.render_pixel(coord);
                 self.image_data.push(utils::convert_to_rgba(color));
             }
         }
@@ -42,16 +50,14 @@ impl Renderer {
     }
 
     #[inline]
-    fn render_pixel(&self, coord: glam::Vec2) -> glam::Vec4 {
+    fn trace_ray(&self, ray: &Ray) -> glam::Vec4 {
         let sphere_center = glam::Vec3::ZERO;
-        let ray_origin = glam::vec3(0.0, 0.0, 1.0);
-        let ray_direction = glam::vec3(coord.x, coord.y, -1.0);
         let radius = 0.5;
         let light_direction = glam::vec3(-1.0, -1.0, -1.0);
 
-        let a = ray_direction.dot(ray_direction);
-        let b = 2.0 * ray_origin.dot(ray_direction);
-        let c = ray_origin.dot(ray_origin) - radius * radius;
+        let a = ray.direction.dot(ray.direction);
+        let b = 2.0 * ray.origin.dot(ray.direction);
+        let c = ray.origin.dot(ray.origin) - radius * radius;
 
         // b^2 - 4ac
         let discriminant = b * b - 4.0 * a * c;
@@ -66,7 +72,7 @@ impl Renderer {
             (-b + d_sqrt) / (2.0 * a),
         ];
 
-        let h0 = ray_origin + t[0] * ray_direction;
+        let h0 = ray.origin + t[0] * ray.direction;
 
         let normal = (h0 - sphere_center).normalize();
         let light_intensity = normal.dot(-light_direction).max(0.0) / light_direction.length();

@@ -1,5 +1,10 @@
 mod app;
 mod renderer;
+mod camera;
+mod state;
+mod ray;
+
+use state::*;
 
 use eframe::egui;
 
@@ -11,7 +16,7 @@ fn main() {
     eframe::run_native(
         name,
         eframe::NativeOptions {
-            vsync: true,
+            vsync: false,
             viewport: egui::ViewportBuilder {
                 title: Some(name.to_string()),
                 inner_size: Some(egui::vec2(900.0, 600.0)),

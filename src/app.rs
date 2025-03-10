@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use std::time::Instant;
 
+use crate::camera::Camera;
 use crate::renderer::Renderer;
 use crate::Program;
 
@@ -13,12 +14,14 @@ use eframe::CreationContext;
 use glow::HasContext;
 
 pub struct Application {
+    camera: Camera,
     vao: glow::VertexArray,
     texture_id: glow::NativeTexture,
     program: Arc<Program>,
     renderer: Arc<Mutex<Renderer>>,
     last_rect: egui::Rect,
     gpu_time: Arc<Mutex<Duration>>,
+    clock: Instant,
 }
 
 impl Application {
@@ -129,6 +132,8 @@ impl Application {
         .unwrap();
 
         Self {
+            camera: Camera::new(45.0_f32.to_radians(), 0.1, 100.0),
+            clock: Instant::now(),
             texture_id,
             vao,
             program: Arc::new(program),
@@ -185,6 +190,33 @@ impl Application {
 
 impl eframe::App for Application {
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
+        let dt = self.clock.elapsed().as_nanos() as f32 / 1e9;
+        self.clock = Instant::now();
+
+        let pointer_state = ctx.input(|i| crate::PointerState {
+            pos: i
+                .pointer
+                .hover_pos()
+                .map(|egui::Pos2 { x, y }| glam::vec2(x, y)),
+            secondary_down: i.pointer.secondary_down(),
+        });
+
+        let keyboard_state = ctx.input(|i| crate::KeyboardState {
+            w: i.keys_down.contains(&egui::Key::W),
+            a: i.keys_down.contains(&egui::Key::A),
+            s: i.keys_down.contains(&egui::Key::S),
+            d: i.keys_down.contains(&egui::Key::D),
+            q: i.keys_down.contains(&egui::Key::Q),
+            e: i.keys_down.contains(&egui::Key::E),
+        });
+
+        self.camera.update(dt, pointer_state, keyboard_state);
+        if pointer_state.secondary_down {
+            ctx.set_cursor_icon(egui::CursorIcon::None);
+        } else {
+            ctx.set_cursor_icon(egui::CursorIcon::Default);
+        }
+
         ctx.set_pixels_per_point(1.0);
 
         egui::Window::new("Info")
@@ -207,6 +239,14 @@ impl eframe::App for Application {
                     ui.allocate_exact_size(ui.available_size(), egui::Sense::drag());
 
                 let old_rect = self.last_rect;
+
+                if old_rect != rect {
+                    self.camera.resize(
+                        (rect.max.y - rect.min.y) as _,
+                        (rect.max.x - rect.min.x) as _,
+                    );
+                }
+
                 self.last_rect = rect;
 
                 let program = Arc::clone(&self.program);
@@ -214,7 +254,7 @@ impl eframe::App for Application {
                 let texture_id = self.texture_id;
                 let gpu_time = Arc::clone(&self.gpu_time);
 
-                self.renderer.lock().unwrap().render(rect);
+                self.renderer.lock().unwrap().render(rect, &self.camera);
                 let renderer = Arc::clone(&self.renderer);
 
                 let callback = egui::PaintCallback {
