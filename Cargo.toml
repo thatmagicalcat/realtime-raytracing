@@ -4,6 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-eframe = { version = "0.31.1", features = ["glow"] }
+eframe = { version = "0.31.1", features = ["default_fonts", "glow", "x11"], default-features = false }
 fastrand = "2.3.0"
 glam = "0.30.0"

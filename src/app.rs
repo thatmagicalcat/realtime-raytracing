@@ -1,5 +1,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
+use std::time::Instant;
 
 use crate::renderer::Renderer;
 use crate::Program;
@@ -16,6 +18,7 @@ pub struct Application {
     program: Arc<Program>,
     renderer: Arc<Mutex<Renderer>>,
     last_rect: egui::Rect,
+    gpu_time: Arc<Mutex<Duration>>,
 }
 
 impl Application {
@@ -131,6 +134,7 @@ impl Application {
             program: Arc::new(program),
             renderer: Arc::new(Renderer::new().into()),
             last_rect: egui::Rect::ZERO,
+            gpu_time: Arc::new(Duration::ZERO.into()),
         }
     }
 
@@ -188,11 +192,13 @@ impl eframe::App for Application {
             .collapsible(true)
             .resizable(true)
             .show(ctx, |ui| {
-                ui.label(format!(
-                    "Frame time: {:?}",
-                    self.renderer.lock().unwrap().render_time
-                ));
+                let gpu_time = *self.gpu_time.lock().unwrap();
+                let render_time = self.renderer.lock().unwrap().render_time;
+
+                ui.label(format!("GPU time: {gpu_time:?}"));
+                ui.label(format!("Render time: {render_time:?}",));
                 ui.separator();
+                ui.label(format!("Frame time: {:?}", gpu_time + render_time));
             });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -206,6 +212,7 @@ impl eframe::App for Application {
                 let program = Arc::clone(&self.program);
                 let vao = self.vao;
                 let texture_id = self.texture_id;
+                let gpu_time = Arc::clone(&self.gpu_time);
 
                 self.renderer.lock().unwrap().render(rect);
                 let renderer = Arc::clone(&self.renderer);
@@ -215,6 +222,8 @@ impl eframe::App for Application {
                     callback: std::sync::Arc::new(eframe::egui_glow::CallbackFn::new(
                         move |_info, painter| {
                             let gl = painter.gl();
+
+                            let clock = Instant::now();
 
                             unsafe {
                                 Self::update_texture(
@@ -237,6 +246,8 @@ impl eframe::App for Application {
                                 gl.bind_vertex_array(Some(vao));
                                 gl.draw_elements(glow::TRIANGLES, 6, glow::UNSIGNED_INT, 0);
                             }
+
+                            *gpu_time.lock().unwrap() = clock.elapsed();
                         },
                     )),
                 };
