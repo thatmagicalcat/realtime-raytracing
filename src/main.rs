@@ -3,6 +3,7 @@ mod renderer;
 mod camera;
 mod state;
 mod ray;
+mod world;
 
 use state::*;
 

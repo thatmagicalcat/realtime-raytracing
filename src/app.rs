@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use crate::camera::Camera;
 use crate::renderer::Renderer;
+use crate::world::*;
 use crate::Program;
 
 use eframe::egui;
@@ -22,6 +23,7 @@ pub struct Application {
     last_rect: egui::Rect,
     gpu_time: Arc<Mutex<Duration>>,
     clock: Instant,
+    world: World,
 }
 
 impl Application {
@@ -131,6 +133,19 @@ impl Application {
         )
         .unwrap();
 
+        let objects = vec![
+            Sphere {
+                position: glam::vec3(0.0, 0.0, 0.0),
+                radius: 0.5,
+                albedo: glam::vec3(1.0, 0.0, 1.0),
+            },
+            Sphere {
+                position: glam::vec3(-0.2, -0.3, -3.0),
+                radius: 2.0,
+                albedo: glam::vec3(1.0, 0.53, 0.0),
+            },
+        ];
+
         Self {
             camera: Camera::new(45.0_f32.to_radians(), 0.1, 100.0),
             clock: Instant::now(),
@@ -140,6 +155,7 @@ impl Application {
             renderer: Arc::new(Renderer::new().into()),
             last_rect: egui::Rect::ZERO,
             gpu_time: Arc::new(Duration::ZERO.into()),
+            world: World { objects },
         }
     }
 
@@ -254,7 +270,10 @@ impl eframe::App for Application {
                 let texture_id = self.texture_id;
                 let gpu_time = Arc::clone(&self.gpu_time);
 
-                self.renderer.lock().unwrap().render(rect, &self.camera);
+                self.renderer
+                    .lock()
+                    .unwrap()
+                    .render(rect, &self.camera, &self.world);
                 let renderer = Arc::clone(&self.renderer);
 
                 let callback = egui::PaintCallback {
